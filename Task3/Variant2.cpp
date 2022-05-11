@@ -8,10 +8,10 @@ void FillX(double* x, int size)
         x[i] = 0;
 }
 
-void FillB(double* b, int size)
+void FillB(double* b, int size, int value)
 {
     for (int i = 0; i < size; i++)
-        b[i] = size + 1;
+        b[i] = value;
 }
 
 void FillA(double* A, int size)
@@ -64,15 +64,15 @@ double GetErrorNuminator(double* A, double* x, double* b, int numRows, int numCo
 int main(int argc, char* argv[])
 {
     int processNum, rank;
-    MPI_Init(&argc, &argv); // Инициализация MPI
-    MPI_Comm_size(MPI_COMM_WORLD, &processNum); // Получение числа процессов
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Получение номера процесса
+    MPI_Init(&argc, &argv); // РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ MPI
+    MPI_Comm_size(MPI_COMM_WORLD, &processNum); // РџРѕР»СѓС‡РµРЅРёРµ С‡РёСЃР»Р° РїСЂРѕС†РµСЃСЃРѕРІ
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // РџРѕР»СѓС‡РµРЅРёРµ РЅРѕРјРµСЂР° РїСЂРѕС†РµСЃСЃР°
 
     MPI_Barrier(MPI_COMM_WORLD);
 
     double start = MPI_Wtime();
 
-    const int size = 10;
+    const int size = 2000;
     const double eps = 1E-8;
     const double tau = 0.0001;
 
@@ -80,16 +80,15 @@ int main(int argc, char* argv[])
     if (size % processNum > rank)
         rowsNum++;
 
-    double* xpart = new double[rowsNum];
-    FillX(xpart, rowsNum);
+    double* x = new double[size];
     double* newXpart = new double[rowsNum];
-    FillX(xpart, rowsNum);
     double* bpart = new double[rowsNum];
-    FillB(bpart, rowsNum);
+    FillX(x, size);
+    FillX(newXpart, size);
+    FillB(bpart, rowsNum, size + 1);
 
-    double* finalX = new double[size];
 
-    if (rank == 0) // основной процесс будет хранить всю инфу и общаться с другими
+    if (rank == 0) // РѕСЃРЅРѕРІРЅРѕР№ РїСЂРѕС†РµСЃСЃ Р±СѓРґРµС‚ С…СЂР°РЅРёС‚СЊ РІСЃСЋ РёРЅС„Сѓ Рё РѕР±С‰Р°С‚СЊСЃСЏ СЃ РґСЂСѓРіРёРјРё
     {
         double* A = new double[size * size];
         FillA(A, size);
@@ -97,8 +96,8 @@ int main(int argc, char* argv[])
         double* Apart = new double[rowsNum * size];
         Apart = A;
 
-        int rowId = rowsNum; // с какой строки начинаются значения текущего процесса
-        int* rowsNums = new int[processNum]; // с каких строк начинаются значения процессов
+        int rowId = rowsNum; // СЃ РєР°РєРѕР№ СЃС‚СЂРѕРєРё РЅР°С‡РёРЅР°СЋС‚СЃСЏ Р·РЅР°С‡РµРЅРёСЏ С‚РµРєСѓС‰РµРіРѕ РїСЂРѕС†РµСЃСЃР°
+        int* rowsNums = new int[processNum]; // СЃ РєР°РєРёС… СЃС‚СЂРѕРє РЅР°С‡РёРЅР°СЋС‚СЃСЏ Р·РЅР°С‡РµРЅРёСЏ РїСЂРѕС†РµСЃСЃРѕРІ
         rowsNums[0] = rowsNum;
         for (int i = 1; i < processNum; i++)
         {
@@ -116,35 +115,16 @@ int main(int argc, char* argv[])
 
         while (error > eps)
         {
-            double* x = new double[size];
-            x = xpart;
-            int idX = rowsNum;
-
             for (int i = 1; i < processNum; i++)
-                MPI_Ssend(&isCalc, 1, MPI_C_BOOL, i, 3, MPI_COMM_WORLD); //даем отмашку считать новый Х
-
-            for (int i = 1; i < processNum; i++) // получаем и склеиваем х
-            {
-                double* tempx = new double[rowsNums[i]];
-                MPI_Recv(tempx, rowsNums[i], MPI_DOUBLE, i, 31, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                for (int j = 0; j < rowsNums[i]; j++)
-                {
-                    x[idX] = tempx[j];
-                    idX++;
-                }
-            }
-
-            for (int i = 1; i < processNum; i++)
-                MPI_Ssend(x, size, MPI_DOUBLE, i, 32, MPI_COMM_WORLD);
+                MPI_Ssend(&isCalc, 1, MPI_C_BOOL, i, 3, MPI_COMM_WORLD); //РґР°РµРј РѕС‚РјР°С€РєСѓ СЃС‡РёС‚Р°С‚СЊ РЅРѕРІС‹Р№ РҐ
 
             UpdateX(x, newXpart, Apart, bpart, tau, rowsNum, size, 0);
 
             for (int i = 0; i < rowsNum; i++)
-                xpart[i] = newXpart[i];
+                x[i] = newXpart[i];
 
-            idX = rowsNum;
-            x = xpart;
-            for (int i = 1; i < processNum; i++) // получаем части новых Х и склеиваем
+            int idX = rowsNum;
+            for (int i = 1; i < processNum; i++) // РїРѕР»СѓС‡Р°РµРј С‡Р°СЃС‚Рё РЅРѕРІС‹С… РҐ Рё СЃРєР»РµРёРІР°РµРј
             {
                 double* x_temp = new double[rowsNums[i]];
                 MPI_Recv(x_temp, rowsNums[i], MPI_DOUBLE, i, 35, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -158,11 +138,9 @@ int main(int argc, char* argv[])
 
 
             for (int i = 1; i < processNum; i++)
-                MPI_Ssend(x, size, MPI_DOUBLE, i, 4, MPI_COMM_WORLD); // отправляем итоговый Х на подсчет ошибок
+                MPI_Ssend(x, size, MPI_DOUBLE, i, 4, MPI_COMM_WORLD); // РѕС‚РїСЂР°РІР»СЏРµРј РёС‚РѕРіРѕРІС‹Р№ РҐ РЅР° РїРѕРґСЃС‡РµС‚ РѕС€РёР±РѕРє
 
             double errorNum = GetErrorNuminator(Apart, x, bpart, rowsNum, size);
-
-            double errorDenom = 0;
 
             for (int i = 1; i < processNum; i++)
             {
@@ -171,32 +149,27 @@ int main(int argc, char* argv[])
                 errorNum += currErrorNum;
             }
 
-            //std::cout << "error " << errorNum << std::endl;
-
+            double errorDenom = 0;
 
             for (int i = 0; i < rowsNum; i++)
                 errorDenom += bpart[i] * bpart[i];
 
             for (int i = 1; i < processNum; i++)
             {
-                double* b_temp = new double[rowsNums[i]];
-                MPI_Recv(b_temp, rowsNums[i], MPI_DOUBLE, i, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                for (int j = 0; j < rowsNums[i]; j++)
-                    errorDenom += b_temp[j] * b_temp[j];
+                double currErrorDenom;
+                MPI_Recv(&currErrorDenom, 1, MPI_DOUBLE, i, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                errorDenom += currErrorDenom;
             }
 
             error = sqrt(errorNum / errorDenom);
-
-            for (int i = 0; i < size; i++)
-                finalX[i] = x[i];
         }
 
-        for (int i = 0; i < size; i++)
-            std::cout << finalX[i] << ' ';
-
-        isCalc = false; // завершаем процессы
+        isCalc = false; // Р·Р°РІРµСЂС€Р°РµРј РїСЂРѕС†РµСЃСЃС‹
         for (int i = 1; i < processNum; i++)
             MPI_Ssend(&isCalc, 1, MPI_C_BOOL, i, 3, MPI_COMM_WORLD);
+
+        for (int i = 0; i < size; i++)
+            std::cout << x[i] << ' ';
 
         double finish = MPI_Wtime();
         std::cout << "\nTime: " << finish - start << std::endl;
@@ -207,43 +180,34 @@ int main(int argc, char* argv[])
         int rowId;
         bool isCalc;
 
-        MPI_Recv(Apart, rowsNum * size, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //получаем матрицу
-        MPI_Recv(&rowId, 1, MPI_INT, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //получаем номер строки начала матрицы
+        MPI_Recv(Apart, rowsNum * size, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //РїРѕР»СѓС‡Р°РµРј РјР°С‚СЂРёС†Сѓ
+        MPI_Recv(&rowId, 1, MPI_INT, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE); //РїРѕР»СѓС‡Р°РµРј РЅРѕРјРµСЂ СЃС‚СЂРѕРєРё РЅР°С‡Р°Р»Р° РјР°С‚СЂРёС†С‹
 
         while (true)
         {
-            MPI_Recv(&isCalc, 1, MPI_C_BOOL, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // получаем отмашку считать
+            MPI_Recv(&isCalc, 1, MPI_C_BOOL, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // РїРѕР»СѓС‡Р°РµРј РѕС‚РјР°С€РєСѓ СЃС‡РёС‚Р°С‚СЊ
 
             if (!isCalc)
                 break;
 
-            MPI_Ssend(xpart, rowsNum, MPI_DOUBLE, 0, 31, MPI_COMM_WORLD);
-
-            //обновляем часть newX и отправляем в основной
-            double* x = new double[size];
-            MPI_Recv(x, size, MPI_DOUBLE, 0, 32, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            //РѕР±РЅРѕРІР»СЏРµРј С‡Р°СЃС‚СЊ newX Рё РѕС‚РїСЂР°РІР»СЏРµРј РІ РѕСЃРЅРѕРІРЅРѕР№
             UpdateX(x, newXpart, Apart, bpart, tau, rowsNum, size, rowId);
+            MPI_Ssend(newXpart, rowsNum, MPI_DOUBLE, 0, 35, MPI_COMM_WORLD);
 
-            for (int i = 0; i < rowsNum; i++)
-                xpart[i] = newXpart[i];
-
-            MPI_Ssend(xpart, rowsNum, MPI_DOUBLE, 0, 35, MPI_COMM_WORLD);
-
-            //считаем локальную ошибку на новом Х
+            //СЃС‡РёС‚Р°РµРј Р»РѕРєР°Р»СЊРЅСѓСЋ РѕС€РёР±РєСѓ РЅР° РЅРѕРІРѕРј РҐ
             MPI_Recv(x, size, MPI_DOUBLE, 0, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            /*for (int i = 0; i < size; i++)
-                std::cout << x[i] << ' ';
-            std::cout << std::endl;*/
-
             double errorNum = GetErrorNuminator(Apart, x, bpart, rowsNum, size);
             MPI_Ssend(&errorNum, 1, MPI_DOUBLE, 0, 5, MPI_COMM_WORLD);
-            MPI_Ssend(bpart, rowsNum, MPI_DOUBLE, 0, 6, MPI_COMM_WORLD);
+
+            double errorDenom = 0;
+            for (int i = 0; i < rowsNum; i++)
+                errorDenom += bpart[i] * bpart[i];
+            MPI_Ssend(&errorDenom, 1, MPI_DOUBLE, 0, 6, MPI_COMM_WORLD);
         }
 
     }
 
-    MPI_Finalize(); // Завершение работы MPI
+    MPI_Finalize(); // Р—Р°РІРµСЂС€РµРЅРёРµ СЂР°Р±РѕС‚С‹ MPI
 
     return 0;
 }
