@@ -127,15 +127,15 @@ public:
         }
     }
 
-    void AddPointToQueue(Point point)
-    {
-	    points.Push(point);
-    }
-
     void CalculatePoint(Point point)
     {
         const auto color = viewPlane.computePixel(scene, point.x, point.y, numOfSamples);
         image.set(point.x, point.y, color);
+    }
+
+    void AddPointToQueue(Point point)
+    {
+        points.Push(point);
     }
 
     void Join()
