@@ -126,7 +126,7 @@ public:
     void ThreadFunction()
     {
         auto task = tasks.Pop();
-        while (task.point[0].x >= 0) // point(-1, -1) - stop element
+        while (task.points[0].x >= 0) // point(-1, -1) - stop element
         {
             CalculateTask(task);
             task = tasks.Pop();
@@ -135,7 +135,7 @@ public:
 
     void CalculateTask(Task task)
     {
-        for (int i = 0; i < task.points.size; i++)
+        for (int i = 0; i < task.points.size(); i++)
         {
             CalculatePoint(task.points[i]);
         }
