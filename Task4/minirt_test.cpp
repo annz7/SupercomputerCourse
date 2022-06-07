@@ -58,6 +58,12 @@ struct Point
     Point(int x, int y) : x(x), y(y) {}
 };
 
+struct Task
+{
+    vector<Point> points;
+    Task(vector<Point> points) : points(points) {}
+};
+
 template<typename T>
 class Queue
 {
@@ -93,7 +99,7 @@ public:
 class ThreadsPool
 {
 public:
-    Queue<Point> points;
+    Queue<Task> tasks;
     vector<thread> threads;
     Scene scene;
     Image image;
@@ -119,11 +125,19 @@ public:
 
     void ThreadFunction()
     {
-        auto point = points.Pop();
-        while (point.x >= 0) // point(-1, -1) - stop element
+        auto task = tasks.Pop();
+        while (task.point[0].x >= 0) // point(-1, -1) - stop element
         {
-            CalculatePoint(point);
-            point = points.Pop();
+            CalculateTask(task);
+            task = tasks.Pop();
+        }
+    }
+
+    void CalculateTask(Task task)
+    {
+        for (int i = 0; i < task.points.size; i++)
+        {
+            CalculatePoint(task.points[i]);
         }
     }
 
@@ -133,15 +147,19 @@ public:
         image.set(point.x, point.y, color);
     }
 
-    void AddPointToQueue(Point point)
+    void AddTaskToQueue(Task task)
     {
-        points.Push(point);
+        tasks.Push(task);
     }
 
     void Join()
     {
         for (int i = 0; i < threadsNum; i++)
-            points.Push({-1, -1}); // add stop element to queue for every thread
+        {
+            vector<Point> endTask;
+            endTask.push_back({ -1,-1 });
+            tasks.Push(endTask); // add stop element to queue for every thread
+        }
 
         for (int i = 0; i < threadsNum; i++)
             threads[i].join();
@@ -182,8 +200,12 @@ int main(int argc, char** argv) {
     auto threadsPool = new ThreadsPool(3, scene, image, viewPlane, numOfSamples);
 
     for (int x = 0; x < viewPlaneResolutionX; x++)
+    {
+        vector<Point> task;
         for (int y = 0; y < viewPlaneResolutionY; y++)
-            threadsPool->AddPointToQueue({ x, y });
+            task.push_back({ x, y });
+        threadsPool->AddTaskToQueue(task);
+    }
 
     threadsPool->Join();
 
